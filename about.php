@@ -75,7 +75,7 @@ $user_type = $_SESSION['user_type'] ?? '';
                 <p>Whether you're a complete beginner or an experienced practitioner, Yogify offers something for everyone. Our mission is to empower individuals to lead healthier, more balanced lives through the practice of yoga.</p>
             </div>
             <div class="col-lg-6">
-                <img src="images/about-yoga.jpg" alt="Yoga Practice" class="img-fluid rounded shadow">
+                <img src="images/Team.webp" alt="Yoga Practice" class="img-fluid rounded shadow">
             </div>
         </div>
     </div>
@@ -125,9 +125,9 @@ $user_type = $_SESSION['user_type'] ?? '';
         <div class="row g-4">
             <div class="col-md-4">
                 <div class="team-card">
-                    <img src="images/team1.jpg" alt="Instructor" class="img-fluid team-img">
+                    <img src="images/team3.png" alt="Instructor" class="img-fluid team-img w-100">
                     <div class="p-4">
-                        <h4>Sarah Johnson</h4>
+                        <h4>Sharma Vinita</h4>
                         <p class="text-muted">Lead Instructor</p>
                         <p>500-hour RYT certified with 10 years of teaching experience</p>
                     </div>
@@ -135,9 +135,9 @@ $user_type = $_SESSION['user_type'] ?? '';
             </div>
             <div class="col-md-4">
                 <div class="team-card">
-                    <img src="images/team2.jpg" alt="Instructor" class="img-fluid team-img">
+                    <img src="images/team2.png" alt="Instructor" class="img-fluid team-img w-100">
                     <div class="p-4">
-                        <h4>Michael Chen</h4>
+                        <h4>Kulkarni Shyam</h4>
                         <p class="text-muted">Yoga Therapist</p>
                         <p>Specialized in therapeutic yoga for injury recovery</p>
                     </div>
@@ -145,7 +145,7 @@ $user_type = $_SESSION['user_type'] ?? '';
             </div>
             <div class="col-md-4">
                 <div class="team-card">
-                    <img src="images/team3.jpg" alt="Instructor" class="img-fluid team-img">
+                    <img src="images/Team1.png" alt="Instructor" class="img-fluid team-img w-100">
                     <div class="p-4">
                         <h4>Priya Sharma</h4>
                         <p class="text-muted">Meditation Guide</p>

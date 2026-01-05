@@ -458,39 +458,46 @@ if($is_logged_in && isset($_POST['add_to_wishlist'])) {
                     </div>
                     
                     <!-- Instructor Card -->
-                    <div class="card border-0 shadow-sm instructor-card">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">Instructor</h5>
-                        </div>
-                        <div class="card-body text-center">
-                            <div class="mb-3">
-                                <?php 
-                                $instructor_id = $course['instructor_id'] ?? 0;
-                                $instructor_query = "SELECT profile_pic FROM users WHERE id = ?";
-                                $instructor_stmt = $conn->prepare($instructor_query);
-                                $instructor_stmt->bind_param("i", $instructor_id);
-                                $instructor_stmt->execute();
-                                $instructor_data = $instructor_stmt->get_result()->fetch_assoc();
-                                ?>
-                                <img src="uploads/profiles/<?php echo $instructor_data['profile_pic'] ?? 'default-avatar.jpg'; ?>" 
-                                     class="rounded-circle" 
-                                     width="100" 
-                                     height="100" 
-                                     style="object-fit: cover;"
-                                     onerror="this.src='uploads/profiles/default-avatar.jpg'">
-                            </div>
-                            <h5><?php echo htmlspecialchars($course['instructor_name'] ?? 'Not Assigned'); ?></h5>
-                            <p class="text-muted">Certified Yoga Instructor</p>
-                            <?php if(!empty($course['instructor_bio'])): ?>
-                                <p class="small"><?php echo nl2br(htmlspecialchars($course['instructor_bio'])); ?></p>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+                    <!-- Instructor Card -->
+<div class="card border-0 shadow-sm instructor-card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Instructor</h5>
+                 </div>
+                 <div class="card-body text-center">
+                     <div class="mb-3">
+                         <?php 
+                         $instructor_id = $course['instructor_id'] ?? 0;
+                         // FIX: Changed profile_pic to profile_image
+                         if($instructor_id > 0) {
+                             $instructor_query = "SELECT profile_image, bio FROM users WHERE id = ?";
+                             $instructor_stmt = $conn->prepare($instructor_query);
+                             $instructor_stmt->bind_param("i", $instructor_id);
+                             $instructor_stmt->execute();
+                             $instructor_result = $instructor_stmt->get_result();
+                             $instructor_data = $instructor_result->fetch_assoc();
+                         } else {
+                             $instructor_data = null;
+                         }
+                         ?>
+                         <img src="uploads/profiles/<?php echo !empty($instructor_data['profile_image']) ? htmlspecialchars($instructor_data['profile_image']) : 'default-avatar.jpg'; ?>" 
+                              class="rounded-circle" 
+                              width="100" 
+                              height="100" 
+                              style="object-fit: cover;"
+                              onerror="this.src='uploads/profiles/default-avatar.jpg'">
+                     </div>
+                     <h5><?php echo htmlspecialchars($course['instructor_name'] ?? 'Not Assigned'); ?></h5>
+                     <p class="text-muted">Certified Yoga Instructor</p>
+                     <?php if(!empty($instructor_data['bio'])): ?>
+                         <p class="small"><?php echo nl2br(htmlspecialchars($instructor_data['bio'])); ?></p>
+                     <?php endif; ?>
+                 </div>
+             </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Footer -->
     <?php include_once 'includes/footer.php'; ?>
     

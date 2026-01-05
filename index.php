@@ -567,7 +567,7 @@ if($conn) {
             <?php if(!empty($featured_courses)): ?>
                 <div class="row g-4">
                     <?php foreach($featured_courses as $course): 
-                        $course_image = 'images/course-default.jpg';
+                        $course_image = 'images/Team';
                         if(!empty($course['image_url']) && file_exists('uploads/courses/' . $course['image_url'])) {
                             $course_image = 'uploads/courses/' . $course['image_url'];
                         }

@@ -1,0 +1,33 @@
+/* Fix for fixed navbar covering content */
+body {
+    padding-top: 76px; /* Height of navbar */
+}
+
+/* For admin pages that have sidebar */
+.admin-pages {
+    padding-top: 56px;
+}
+
+/* Ensure dropdown works properly */
+.dropdown-menu {
+    z-index: 1050;
+}
+
+/* Fix for mobile navbar */
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .navbar-nav .nav-item {
+        margin-bottom: 10px;
+    }
+    
+    .navbar-nav .nav-item:last-child {
+        margin-bottom: 0;
+    }
+}

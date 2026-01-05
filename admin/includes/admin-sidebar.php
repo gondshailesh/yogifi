@@ -59,11 +59,11 @@
                     <i class="bi bi-arrow-left me-2"></i> Back to Dashboard
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link text-danger" href="../logout.php">
-                    <i class="bi bi-box-arrow-right me-2"></i> Logout
-                </a>
-            </li>
+          <li class="nav-item">
+    <a href="../../logout.php" class="nav-link" onclick="return confirm('Are you sure you want to logout?')">
+        <i class="fas fa-sign-out-alt"></i> Logout
+    </a>
+</li>
         </ul>
     </div>
 </div>

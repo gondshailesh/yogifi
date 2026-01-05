@@ -1,7 +1,0 @@
-ErrorDocument 404 /404.php
-
-# Remove .php extension
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME}\.php -f
-RewriteRule ^(.*)$ $1.php [L]
