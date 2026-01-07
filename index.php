@@ -7,40 +7,10 @@ require_once 'includes/dbconnect.php';
 $is_logged_in = isset($_SESSION['user_id']);
 $user_name = $_SESSION['user_name'] ?? '';
 $user_type = $_SESSION['user_type'] ?? '';
+$full_name = $_SESSION['full_name'] ?? '';
 
-// Get featured courses for homepage
+// Initialize variables
 $featured_courses = [];
-if($conn) {
-
-    // Check if courses table exists
-    $table_check = $conn->query("SHOW TABLES LIKE 'courses'");
-    if($table_check->num_rows > 0) {
-        $query = "SELECT c.*, u.full_name as instructor_name 
-                  FROM courses c 
-                  LEFT JOIN users u ON c.instructor_id = u.id 
-                  WHERE 1=1";
-        
-        // Check if is_featured column exists
-        $col_check = $conn->query("SHOW COLUMNS FROM courses LIKE 'is_featured'");
-        if($col_check->num_rows > 0) {
-            $query .= " AND (c.is_featured = 1 OR c.is_featured IS NULL)";
-        }
-        
-        // Check if is_active column exists
-        $col_check = $conn->query("SHOW COLUMNS FROM courses LIKE 'is_active'");
-        if($col_check->num_rows > 0) {
-            $query .= " AND c.is_active = 1";
-        }
-        
-        $query .= " ORDER BY c.created_at DESC LIMIT 6";
-        $result = $conn->query($query);
-        if($result) {
-            $featured_courses = $result->fetch_all(MYSQLI_ASSOC);
-        }
-    }
-}
-
-// Get total counts for statistics
 $stats = [
     'total_courses' => 0,
     'total_students' => 0,
@@ -48,19 +18,55 @@ $stats = [
     'success_rate' => 98
 ];
 
+// Get featured courses for homepage - FIXED VERSION
 if($conn) {
-    $table_check = $conn->query("SHOW TABLES LIKE 'courses'");
-    if($table_check->num_rows > 0) {
-        $count = $conn->query("SELECT COUNT(*) as total FROM courses")->fetch_assoc();
-        $stats['total_courses'] = $count['total'] ?? 0;
-    }
-    
-    $table_check = $conn->query("SHOW TABLES LIKE 'users'");
-    if($table_check->num_rows > 0) {
-        $students = $conn->query("SELECT COUNT(*) as total FROM users WHERE user_type = 'student'")->fetch_assoc();
-        $instructors = $conn->query("SELECT COUNT(*) as total FROM users WHERE user_type = 'instructor'")->fetch_assoc();
-        $stats['total_students'] = $students['total'] ?? 0;
-        $stats['total_instructors'] = $instructors['total'] ?? 0;
+    try {
+        // Check if courses table exists
+        $table_check = $conn->query("SHOW TABLES LIKE 'courses'");
+        if($table_check && $table_check->num_rows > 0) {
+            // Build query based on actual table structure
+            $query = "SELECT c.*, u.full_name as instructor_name 
+                      FROM courses c 
+                      LEFT JOIN users u ON c.instructor_id = u.id 
+                      WHERE c.is_active = 1";
+            
+            // Check if is_published column exists
+            $col_check = $conn->query("SHOW COLUMNS FROM courses LIKE 'is_published'");
+            if($col_check && $col_check->num_rows > 0) {
+                $query .= " AND c.is_published = 1";
+            }
+            
+            $query .= " ORDER BY c.created_at DESC LIMIT 6";
+            
+            $result = $conn->query($query);
+            if($result) {
+                $featured_courses = $result->fetch_all(MYSQLI_ASSOC);
+            }
+        }
+        
+        // Get statistics
+        // Total courses
+        $courses_count = $conn->query("SELECT COUNT(*) as total FROM courses WHERE is_active = 1");
+        if($courses_count) {
+            $count = $courses_count->fetch_assoc();
+            $stats['total_courses'] = $count['total'] ?? 0;
+        }
+        
+        // Total students and instructors
+        $users_count = $conn->query("SELECT 
+            SUM(CASE WHEN user_type = 'student' THEN 1 ELSE 0 END) as students,
+            SUM(CASE WHEN user_type = 'instructor' THEN 1 ELSE 0 END) as instructors
+            FROM users WHERE is_active = 1");
+        
+        if($users_count) {
+            $user_stats = $users_count->fetch_assoc();
+            $stats['total_students'] = $user_stats['students'] ?? 0;
+            $stats['total_instructors'] = $user_stats['instructors'] ?? 0;
+        }
+        
+    } catch (Exception $e) {
+        // Log error but continue loading page
+        error_log("Error loading featured courses: " . $e->getMessage());
     }
 }
 ?>
@@ -216,9 +222,10 @@ if($conn) {
             color: var(--dark-color);
         }
         
-        /* Courses Section */
+        /* Courses Section - FIXED */
         .courses-section {
             padding: 100px 0;
+            background: white;
         }
         
         .section-title {
@@ -247,6 +254,7 @@ if($conn) {
             transition: all 0.3s ease;
             height: 100%;
             background: white;
+            border: 1px solid #eee;
         }
         
         .course-card-home:hover {
@@ -258,6 +266,7 @@ if($conn) {
             height: 200px;
             width: 100%;
             object-fit: cover;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
         }
         
         .course-badge {
@@ -270,6 +279,7 @@ if($conn) {
             border-radius: 20px;
             font-size: 0.8rem;
             font-weight: 600;
+            z-index: 1;
         }
         
         .course-content {
@@ -281,11 +291,17 @@ if($conn) {
             font-weight: 600;
             margin-bottom: 10px;
             color: var(--dark-color);
+            height: 60px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
         }
         
         .course-meta {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             margin-bottom: 15px;
             font-size: 0.9rem;
             color: #666;
@@ -301,7 +317,13 @@ if($conn) {
             width: 30px;
             height: 30px;
             border-radius: 50%;
-            object-fit: cover;
+            background: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
         }
         
         .course-price {
@@ -371,6 +393,7 @@ if($conn) {
             height: 50px;
             border-radius: 50%;
             object-fit: cover;
+            border: 2px solid var(--primary-color);
         }
         
         .author-info h5 {
@@ -429,6 +452,44 @@ if($conn) {
             box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);
         }
         
+        /* Level Badges */
+        .badge-level {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .badge-beginner {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-intermediate {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-advanced {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* No Courses State */
+        .no-courses-state {
+            padding: 60px 0;
+            text-align: center;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+        
+        .no-courses-icon {
+            font-size: 4rem;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+        
         /* Animations */
         .animate-on-scroll {
             opacity: 0;
@@ -439,6 +500,23 @@ if($conn) {
         .animate-on-scroll.visible {
             opacity: 1;
             transform: translateY(0);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 100px 0 60px;
+            }
+            
+            .features-section,
+            .courses-section,
+            .testimonials-section {
+                padding: 60px 0;
+            }
+            
+            .stat-number {
+                font-size: 2.5rem;
+            }
         }
     </style>
 </head>
@@ -556,8 +634,8 @@ if($conn) {
         </div>
     </section>
 
-    <!-- Featured Courses -->
-    <section class="courses-section">
+    <!-- Featured Courses - FIXED SECTION -->
+    <section class="courses-section" id="featured-courses">
         <div class="container">
             <div class="section-title">
                 <h2>Featured Courses</h2>
@@ -567,50 +645,92 @@ if($conn) {
             <?php if(!empty($featured_courses)): ?>
                 <div class="row g-4">
                     <?php foreach($featured_courses as $course): 
-                        $course_image = 'images/Team';
-                        if(!empty($course['image_url']) && file_exists('uploads/courses/' . $course['image_url'])) {
-                            $course_image = 'uploads/courses/' . $course['image_url'];
+                        // Get course image - FIXED LOGIC
+                        $course_image = 'images/Team.webp'; // Default image
+                        
+                        if(!empty($course['thumbnail']) && file_exists($course['thumbnail'])) {
+                            $course_image = $course['thumbnail'];
+                        } elseif(!empty($course['thumbnail']) && file_exists('../' . $course['thumbnail'])) {
+                            $course_image = '../' . $course['thumbnail'];
+                        }
+                        
+                        // Generate instructor avatar initials
+                        $instructor_initials = 'YI';
+                        if(!empty($course['instructor_name'])) {
+                            $names = explode(' ', $course['instructor_name']);
+                            $instructor_initials = strtoupper(substr($names[0], 0, 1));
+                            if(isset($names[1])) {
+                                $instructor_initials .= strtoupper(substr($names[1], 0, 1));
+                            }
+                        }
+                        
+                        // Determine level badge class
+                        $level_class = 'badge-level ';
+                        switch(strtolower($course['level'] ?? 'beginner')) {
+                            case 'intermediate':
+                                $level_class .= 'badge-intermediate';
+                                break;
+                            case 'advanced':
+                                $level_class .= 'badge-advanced';
+                                break;
+                            default:
+                                $level_class .= 'badge-beginner';
                         }
                     ?>
-                    <div class="col-md-4 animate-on-scroll">
-                        <div class="course-card-home">
+                    <div class="col-lg-4 col-md-6">
+                        <div class="course-card-home animate-on-scroll">
                             <div class="position-relative">
-                                <img src="<?php echo $course_image; ?>" 
+                                <img src="<?php echo htmlspecialchars($course_image); ?>" 
                                      class="course-img-home" 
                                      alt="<?php echo htmlspecialchars($course['title']); ?>"
-                                     onerror="this.src='images/course-default.jpg'">
+                                     onerror="this.onerror=null; this.src='images/Team.webp';">
+                                
                                 <?php if(($course['price'] ?? 0) == 0): ?>
                                     <span class="course-badge bg-success">Free</span>
                                 <?php else: ?>
                                     <span class="course-badge">₹<?php echo number_format($course['price'], 2); ?></span>
                                 <?php endif; ?>
                             </div>
+                            
                             <div class="course-content">
-                                <h4 class="course-title"><?php echo htmlspecialchars($course['title']); ?></h4>
+                                <h4 class="course-title">
+                                    <?php echo htmlspecialchars($course['title']); ?>
+                                </h4>
+                                
                                 <div class="course-meta">
                                     <div class="course-instructor">
-                                        <i class="bi bi-person"></i>
-                                        <span><?php echo htmlspecialchars($course['instructor_name'] ?? 'Expert Instructor'); ?></span>
+                                        <div class="instructor-avatar">
+                                            <?php echo $instructor_initials; ?>
+                                        </div>
+                                        <span><?php echo htmlspecialchars($course['instructor_name'] ?? 'Yogify Instructor'); ?></span>
                                     </div>
+                                    
                                     <?php if(!empty($course['level'])): ?>
-                                        <span class="badge bg-<?php 
-                                            echo $course['level'] == 'beginner' ? 'success' : 
-                                                 ($course['level'] == 'intermediate' ? 'warning' : 'danger'); 
-                                        ?>">
+                                        <span class="<?php echo $level_class; ?>">
                                             <?php echo ucfirst($course['level']); ?>
                                         </span>
                                     <?php endif; ?>
                                 </div>
-                                <p class="text-muted mb-3">
+                                
+                                <p class="text-muted mb-3" style="font-size: 0.9rem; line-height: 1.5; height: 60px; overflow: hidden;">
                                     <?php 
-                                    $desc = strip_tags($course['description'] ?? '');
+                                    $desc = strip_tags($course['description'] ?? 'Learn yoga from expert instructors');
                                     echo strlen($desc) > 80 ? substr($desc, 0, 80) . '...' : $desc;
                                     ?>
                                 </p>
-                                <a href="course-details.php?id=<?php echo $course['id']; ?>" 
-                                   class="btn btn-outline-success w-100">
-                                    <i class="bi bi-eye me-1"></i>View Course
-                                </a>
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <?php if(($course['price'] ?? 0) > 0): ?>
+                                        <span class="course-price">₹<?php echo number_format($course['price'], 2); ?></span>
+                                    <?php else: ?>
+                                        <span class="course-price price-free">Free</span>
+                                    <?php endif; ?>
+                                    
+                                    <a href="course-details.php?id=<?php echo $course['id']; ?>" 
+                                       class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-eye me-1"></i>View Course
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -618,21 +738,29 @@ if($conn) {
                 </div>
                 
                 <div class="text-center mt-5">
-                    <a href="courses.php" class="btn btn-success btn-lg px-5">
+                    <a href="courses.php" class="btn btn-success btn-lg px-5 py-3">
                         <i class="bi bi-arrow-right me-2"></i>View All Courses
                     </a>
                 </div>
                 
             <?php else: ?>
-                <div class="text-center py-5">
-                    <i class="bi bi-flower1" style="font-size: 4rem; color: #ddd;"></i>
-                    <h4 class="mt-3">Courses Coming Soon</h4>
-                    <p class="text-muted">We're preparing amazing yoga courses for you</p>
-                    <?php if(!$is_logged_in): ?>
-                        <a href="register.php" class="btn btn-success mt-3">
-                            <i class="bi bi-bell me-1"></i>Notify Me
+                <!-- No courses state - FIXED -->
+                <div class="no-courses-state animate-on-scroll">
+                    <div class="no-courses-icon">
+                        <i class="bi bi-flower1"></i>
+                    </div>
+                    <h4 class="mb-3">Amazing Yoga Courses Coming Soon!</h4>
+                    <p class="text-muted mb-4">We're preparing transformative yoga courses to help you on your journey</p>
+                    <div class="d-flex flex-wrap justify-content-center gap-3">
+                        <?php if(!$is_logged_in): ?>
+                            <a href="register.php" class="btn btn-success">
+                                <i class="bi bi-person-plus me-1"></i>Join Now to Get Notified
+                            </a>
+                        <?php endif; ?>
+                        <a href="about.php" class="btn btn-outline-success">
+                            <i class="bi bi-info-circle me-1"></i>Learn More About Us
                         </a>
-                    <?php endif; ?>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>
@@ -649,15 +777,15 @@ if($conn) {
                 <div class="col-md-4 animate-on-scroll">
                     <div class="testimonial-card">
                         <div class="testimonial-text">
-                            "Yogify transformed my life! The beginner courses helped me build a solid foundation, and now I practice daily."
+                            "Yogify transformed my life! The beginner courses helped me build a solid foundation, and now I practice daily. The instructors are amazing!"
                         </div>
                         <div class="testimonial-author">
-                            <img src="https://randomuser.me/api/portraits/women/32.jpg" 
+                            <img src="images/Team1.png" 
                                  class="author-avatar" 
                                  alt="Sarah Johnson">
                             <div class="author-info">
                                 <h5>Sarah Johnson</h5>
-                                <p>Beginner Yogi</p>
+                                <p>Beginner Yogi • 6 months</p>
                             </div>
                         </div>
                     </div>
@@ -665,15 +793,15 @@ if($conn) {
                 <div class="col-md-4 animate-on-scroll">
                     <div class="testimonial-card">
                         <div class="testimonial-text">
-                            "As a busy professional, the flexible schedule and expert guidance helped me maintain consistency in my practice."
+                            "As a busy professional, Yogify's flexible schedule and expert guidance helped me maintain consistency. My stress levels have reduced significantly!"
                         </div>
                         <div class="testimonial-author">
-                            <img src="https://randomuser.me/api/portraits/men/54.jpg" 
+                            <img src="images/Team2.png" 
                                  class="author-avatar" 
                                  alt="Michael Chen">
                             <div class="author-info">
                                 <h5>Michael Chen</h5>
-                                <p>Software Developer</p>
+                                <p>Software Developer • 4 months</p>
                             </div>
                         </div>
                     </div>
@@ -681,15 +809,15 @@ if($conn) {
                 <div class="col-md-4 animate-on-scroll">
                     <div class="testimonial-card">
                         <div class="testimonial-text">
-                            "The meditation courses helped me manage stress effectively. I feel more peaceful and focused every day."
+                            "The meditation and pranayama courses helped me manage anxiety effectively. I feel more peaceful, focused, and energetic every single day!"
                         </div>
                         <div class="testimonial-author">
-                            <img src="https://randomuser.me/api/portraits/women/67.jpg" 
+                            <img src="images/Team3.png" 
                                  class="author-avatar" 
                                  alt="Priya Sharma">
                             <div class="author-info">
                                 <h5>Priya Sharma</h5>
-                                <p>Meditation Enthusiast</p>
+                                <p>Meditation Enthusiast • 8 months</p>
                             </div>
                         </div>
                     </div>
@@ -704,7 +832,7 @@ if($conn) {
             <h2 class="cta-title">Start Your Yoga Journey Today</h2>
             <p class="cta-subtitle">
                 Join our community of yoga enthusiasts and experience the transformation 
-                in your physical and mental well-being.
+                in your physical and mental well-being. No experience required!
             </p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <?php if($is_logged_in): ?>
@@ -714,14 +842,68 @@ if($conn) {
                     <a href="courses.php" class="btn btn-outline-light btn-lg px-5 py-3">
                         <i class="bi bi-play-circle me-2"></i>Browse Courses
                     </a>
+                    <a href="schedule.php" class="btn btn-outline-light btn-lg px-5 py-3">
+                        <i class="bi bi-calendar-check me-2"></i>View Schedule
+                    </a>
                 <?php else: ?>
                     <a href="register.php" class="btn btn-light btn-lg px-5 py-3">
-                        <i class="bi bi-person-plus me-2"></i>Sign Up Free
+                        <i class="bi bi-person-plus me-2"></i>Start Free Trial
                     </a>
                     <a href="login.php" class="btn btn-outline-light btn-lg px-5 py-3">
-                        <i class="bi bi-box-arrow-in-right me-2"></i>Login
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Login to Continue
+                    </a>
+                    <a href="courses.php" class="btn btn-outline-light btn-lg px-5 py-3">
+                        <i class="bi bi-eye me-2"></i>Browse as Guest
                     </a>
                 <?php endif; ?>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits Section -->
+    <section class="features-section" style="background: white;">
+        <div class="container">
+            <div class="section-title">
+                <h2>Benefits of Yoga Practice</h2>
+                <p>Discover how yoga can transform your life</p>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-3 col-6">
+                    <div class="text-center">
+                        <div class="feature-icon mb-3" style="width: 70px; height: 70px;">
+                            <i class="bi bi-heart-pulse"></i>
+                        </div>
+                        <h5>Better Health</h5>
+                        <p class="text-muted small">Improve flexibility & strength</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="text-center">
+                        <div class="feature-icon mb-3" style="width: 70px; height: 70px;">
+                            <i class="bi bi-emoji-smile"></i>
+                        </div>
+                        <h5>Stress Relief</h5>
+                        <p class="text-muted small">Reduce anxiety & tension</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="text-center">
+                        <div class="feature-icon mb-3" style="width: 70px; height: 70px;">
+                            <i class="bi bi-moon-stars"></i>
+                        </div>
+                        <h5>Better Sleep</h5>
+                        <p class="text-muted small">Improve sleep quality</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="text-center">
+                        <div class="feature-icon mb-3" style="width: 70px; height: 70px;">
+                            <i class="bi bi-lightbulb"></i>
+                        </div>
+                        <h5>Mental Clarity</h5>
+                        <p class="text-muted small">Enhanced focus & concentration</p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -731,17 +913,20 @@ if($conn) {
         <div class="container">
             <div class="row justify-content-center">
                 <div class="col-lg-8 text-center">
-                    <h2 class="mb-4">Stay Updated</h2>
-                    <p class="text-muted mb-4">Subscribe to our newsletter for yoga tips, new courses, and special offers</p>
-                    <form class="newsletter-form">
-                        <div class="input-group mb-3">
+                    <h2 class="mb-3">Stay Updated With Yoga Tips</h2>
+                    <p class="text-muted mb-4">Subscribe to our newsletter for weekly yoga tips, new course announcements, and exclusive offers</p>
+                    <form class="newsletter-form" id="newsletterForm">
+                        <div class="input-group mb-3 shadow-sm">
                             <input type="email" class="form-control form-control-lg" 
-                                   placeholder="Enter your email address" required>
-                            <button class="btn btn-success btn-lg px-4" type="submit">
-                                <i class="bi bi-envelope-check"></i>
+                                   placeholder="Enter your email address" 
+                                   id="newsletterEmail"
+                                   required>
+                            <button class="btn btn-success btn-lg px-4" type="submit" id="newsletterBtn">
+                                <span id="btnText">Subscribe</span>
+                                <i class="bi bi-envelope-check ms-2"></i>
                             </button>
                         </div>
-                        <small class="text-muted">We respect your privacy. Unsubscribe at any time.</small>
+                        <small class="text-muted">We respect your privacy. Unsubscribe at any time. No spam ever.</small>
                     </form>
                 </div>
             </div>
@@ -757,9 +942,11 @@ if($conn) {
         // Scroll animations
         function checkScroll() {
             const elements = document.querySelectorAll('.animate-on-scroll');
+            const windowHeight = window.innerHeight;
+            
             elements.forEach(element => {
                 const elementTop = element.getBoundingClientRect().top;
-                const windowHeight = window.innerHeight;
+                
                 if (elementTop < windowHeight - 100) {
                     element.classList.add('visible');
                 }
@@ -770,32 +957,74 @@ if($conn) {
         window.addEventListener('scroll', checkScroll);
         window.addEventListener('load', checkScroll);
         
-        // Initialize tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-        
         // Newsletter form submission
-        document.querySelector('.newsletter-form').addEventListener('submit', function(e) {
+        document.getElementById('newsletterForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const email = this.querySelector('input[type="email"]').value;
+            
+            const email = document.getElementById('newsletterEmail').value;
+            const btn = document.getElementById('newsletterBtn');
+            const btnText = document.getElementById('btnText');
+            
             if(email) {
-                alert('Thank you for subscribing to our newsletter!');
-                this.reset();
+                // Show loading state
+                btn.disabled = true;
+                btnText.textContent = 'Subscribing...';
+                
+                // Simulate API call
+                setTimeout(() => {
+                    // Show success message
+                    alert('🎉 Thank you for subscribing to our newsletter! You\'ll receive yoga tips and updates soon.');
+                    
+                    // Reset form
+                    document.getElementById('newsletterForm').reset();
+                    
+                    // Reset button
+                    btn.disabled = false;
+                    btnText.textContent = 'Subscribe';
+                }, 1000);
             }
         });
         
         // Smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if(target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if(href !== '#') {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if(target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                }
+            });
+        });
+        
+        // Initialize tooltips if any
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Course card hover effects
+        document.querySelectorAll('.course-card-home').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-10px)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+            });
+        });
+        
+        // Image error handling
+        document.querySelectorAll('img').forEach(img => {
+            img.addEventListener('error', function() {
+                if(!this.hasAttribute('data-fallback-set')) {
+                    this.setAttribute('data-fallback-set', 'true');
+                    this.src = 'images/Team.webp';
                 }
             });
         });

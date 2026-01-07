@@ -16,205 +16,66 @@ $message_type = '';
 $action = $_GET['action'] ?? '';
 $id = $_GET['id'] ?? 0;
 
-// Process course form submission
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $course_id = $_POST['id'] ?? 0;
-    $title = trim($_POST['title']);
-    $description = trim($_POST['description']);
-    $short_description = trim($_POST['short_description'] ?? '');
-    $code = trim($_POST['code'] ?? '');
-    $duration = trim($_POST['duration'] ?? '');
-    $level = $_POST['level'];
-    $price = $_POST['price'];
-    $discounted_price = $_POST['discounted_price'] ?: null;
-    $category = $_POST['category'];
-    $is_published = isset($_POST['is_published']) ? 1 : 0;
-    $is_active = isset($_POST['is_active']) ? 1 : 0;
-    $instructor_id = $_POST['instructor_id'] ?: null;
+// Update enrollment status (based on your table structure)
+if ($action == 'update_status' && $id > 0) {
+    $completed = $_GET['status'] == 'completed' ? 1 : 0;
     
-    // Validate
-    if (empty($title)) {
-        $message = "Title is required!";
-        $message_type = "error";
-    } else {
-        // Check if course code already exists (if provided)
-        if (!empty($code)) {
-            $check_sql = "SELECT id FROM courses WHERE code = ? AND id != ?";
-            $check_stmt = $conn->prepare($check_sql);
-            $check_stmt->bind_param("si", $code, $course_id);
-            $check_stmt->execute();
-            $check_result = $check_stmt->get_result();
-            
-            if ($check_result->num_rows > 0) {
-                $message = "Course code already exists!";
-                $message_type = "error";
-                $check_stmt->close();
-                $check_stmt = null;
-            } else {
-                $check_stmt->close();
-                $check_stmt = null;
-            }
-        }
-        
-        if (!$check_stmt) { // Only proceed if no duplicate code error
-            if ($course_id > 0) {
-                // Update existing course - based on your actual database structure
-                $sql = "UPDATE courses SET 
-                        title = ?, 
-                        description = ?, 
-                        instructor_id = ?, 
-                        category = ?, 
-                        level = ?, 
-                        duration = ?, 
-                        price = ?, 
-                        thumbnail = ?, 
-                        is_published = ?, 
-                        is_active = ?
-                        WHERE id = ?";
-                
-                $stmt = $conn->prepare($sql);
-                if ($stmt) {
-                    // Note: We're not updating code since it doesn't exist in your table
-                    // We'll use thumbnail field for image path
-                    $thumbnail_path = $course['thumbnail'] ?? null;
-                    $stmt->bind_param("ssisssdsiii", 
-                        $title, $description, $instructor_id, $category, $level, 
-                        $duration, $price, $thumbnail_path, $is_published, 
-                        $is_active, $course_id
-                    );
-                    $action_text = "updated";
-                } else {
-                    $message = "Database error: " . $conn->error;
-                    $message_type = "error";
-                }
-            } else {
-                // Add new course - based on your actual database structure
-                $sql = "INSERT INTO courses (
-                    title, description, instructor_id, category, level, 
-                    duration, price, thumbnail, is_published, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                
-                $stmt = $conn->prepare($sql);
-                if ($stmt) {
-                    $thumbnail_path = null;
-                    $stmt->bind_param("ssisssdsii", 
-                        $title, $description, $instructor_id, $category, $level, 
-                        $duration, $price, $thumbnail_path, $is_published, 
-                        $is_active
-                    );
-                    $action_text = "added";
-                } else {
-                    $message = "Database error: " . $conn->error;
-                    $message_type = "error";
-                }
-            }
-            
-            if (isset($stmt) && $stmt) {
-                if ($stmt->execute()) {
-                    $message = "Course {$action_text} successfully!";
-                    $message_type = "success";
-                    
-                    // If new course, get the ID
-                    if ($course_id == 0) {
-                        $course_id = $stmt->insert_id;
-                    }
-                    
-                    // Handle course image upload
-                    if (isset($_FILES['course_image']) && $_FILES['course_image']['error'] == 0) {
-                        $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                        $file_type = $_FILES['course_image']['type'];
-                        
-                        if (in_array($file_type, $allowed_types)) {
-                            $upload_dir = '../uploads/courses/';
-                            if (!file_exists($upload_dir)) {
-                                mkdir($upload_dir, 0777, true);
-                            }
-                            
-                            $file_extension = pathinfo($_FILES['course_image']['name'], PATHINFO_EXTENSION);
-                            $filename = 'course_' . $course_id . '_' . time() . '.' . $file_extension;
-                            $filepath = $upload_dir . $filename;
-                            
-                            if (move_uploaded_file($_FILES['course_image']['tmp_name'], $filepath)) {
-                                // Update course with image path (store in thumbnail field)
-                                $update_sql = "UPDATE courses SET thumbnail = ? WHERE id = ?";
-                                $update_stmt = $conn->prepare($update_sql);
-                                $image_path = 'uploads/courses/' . $filename;
-                                $update_stmt->bind_param("si", $image_path, $course_id);
-                                $update_stmt->execute();
-                                $update_stmt->close();
-                            }
-                        }
-                    }
-                } else {
-                    $message = "Error: " . $conn->error;
-                    $message_type = "error";
-                }
-                $stmt->close();
-            }
-        }
-    }
-}
-
-// Delete Course
-if ($action == 'delete' && $id > 0) {
-    // Check if course has enrollments (you might need to create this table)
-    // For now, just delete the course
-    $sql = "DELETE FROM courses WHERE id = ?";
+    $sql = "UPDATE enrollments SET completed = ? WHERE id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $completed, $id);
     
     if ($stmt->execute()) {
-        $message = "Course deleted successfully!";
+        $message = "Enrollment status updated!";
         $message_type = "success";
     } else {
-        $message = "Error deleting course: " . $conn->error;
+        $message = "Error updating status: " . $conn->error;
         $message_type = "error";
     }
     $stmt->close();
 }
 
-// Toggle Course Status
-if ($action == 'toggle_status' && $id > 0) {
-    $new_status = $_GET['status'] ?? '';
-    if (in_array($new_status, ['active', 'inactive'])) {
-        $status_value = $new_status == 'active' ? 1 : 0;
-        $sql = "UPDATE courses SET is_active = ? WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ii", $status_value, $id);
-        
-        if ($stmt->execute()) {
-            $message = "Course status updated!";
-            $message_type = "success";
-        } else {
-            $message = "Error updating status: " . $conn->error;
-            $message_type = "error";
-        }
-        $stmt->close();
+// Delete enrollment
+if ($action == 'delete' && $id > 0) {
+    $sql = "DELETE FROM enrollments WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $id);
+    
+    if ($stmt->execute()) {
+        $message = "Enrollment deleted successfully!";
+        $message_type = "success";
+    } else {
+        $message = "Error deleting enrollment: " . $conn->error;
+        $message_type = "error";
     }
+    $stmt->close();
 }
 
-// Toggle Published Status
-if ($action == 'toggle_published' && $id > 0) {
-    // Get current published status
-    $check_sql = "SELECT is_published FROM courses WHERE id = ?";
+// Manual enrollment
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['manual_enroll'])) {
+    $user_id = $_POST['user_id'];
+    $course_id = $_POST['course_id'];
+    
+    // Check if already enrolled
+    $check_sql = "SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?";
     $check_stmt = $conn->prepare($check_sql);
-    $check_stmt->bind_param("i", $id);
+    $check_stmt->bind_param("ii", $user_id, $course_id);
     $check_stmt->execute();
     $check_result = $check_stmt->get_result();
     
     if ($check_result->num_rows > 0) {
-        $course = $check_result->fetch_assoc();
-        $new_status = $course['is_published'] ? 0 : 1;
-        
-        $sql = "UPDATE courses SET is_published = ? WHERE id = ?";
+        $message = "User is already enrolled in this course!";
+        $message_type = "error";
+    } else {
+        $sql = "INSERT INTO enrollments (user_id, course_id, enrolled_at, progress_percent, completed) 
+                VALUES (?, ?, NOW(), 0, 0)";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ii", $new_status, $id);
+        $stmt->bind_param("ii", $user_id, $course_id);
         
         if ($stmt->execute()) {
-            $message = "Course published status updated!";
+            $message = "User enrolled successfully!";
             $message_type = "success";
         } else {
-            $message = "Error updating published status: " . $conn->error;
+            $message = "Error enrolling user: " . $conn->error;
             $message_type = "error";
         }
         $stmt->close();
@@ -222,40 +83,15 @@ if ($action == 'toggle_published' && $id > 0) {
     $check_stmt->close();
 }
 
-// Get course for editing
-$course = null;
-if ($action == 'edit' && $id > 0) {
-    $sql = "SELECT c.*, u.full_name as instructor_name 
-            FROM courses c
-            LEFT JOIN users u ON c.instructor_id = u.id
-            WHERE c.id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if ($result->num_rows > 0) {
-        $course = $result->fetch_assoc();
-    }
-    $stmt->close();
-}
-
-// Get all instructors for dropdown
-$instructors = [];
-$instructor_sql = "SELECT id, full_name, username FROM users WHERE user_type = 'instructor' AND is_active = 1 ORDER BY full_name";
-$instructor_result = $conn->query($instructor_sql);
-if ($instructor_result) {
-    $instructors = $instructor_result->fetch_all(MYSQLI_ASSOC);
-}
-
 // Get search parameters
 $search = $_GET['search'] ?? '';
-$category_filter = $_GET['category'] ?? '';
-$level_filter = $_GET['level'] ?? '';
 $status_filter = $_GET['status'] ?? '';
-$published_filter = $_GET['published'] ?? '';
+$course_filter = $_GET['course'] ?? '';
+$date_from = $_GET['date_from'] ?? '';
+$date_to = $_GET['date_to'] ?? '';
 $sort = $_GET['sort'] ?? 'newest';
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$limit = 12;
+$limit = 15;
 $offset = ($page - 1) * $limit;
 
 // Build WHERE clause
@@ -264,60 +100,60 @@ $params = [];
 $types = '';
 
 if (!empty($search)) {
-    $where_clause .= " AND (c.title LIKE ? OR c.description LIKE ? OR u.full_name LIKE ?)";
+    $where_clause .= " AND (u.full_name LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR c.title LIKE ?)";
     $search_term = "%$search%";
-    array_push($params, $search_term, $search_term, $search_term);
-    $types .= 'sss';
-}
-
-if (!empty($category_filter) && $category_filter != 'all') {
-    $where_clause .= " AND c.category = ?";
-    $params[] = $category_filter;
-    $types .= 's';
-}
-
-if (!empty($level_filter) && $level_filter != 'all') {
-    $where_clause .= " AND c.level = ?";
-    $params[] = $level_filter;
-    $types .= 's';
+    array_push($params, $search_term, $search_term, $search_term, $search_term);
+    $types .= 'ssss';
 }
 
 if (!empty($status_filter) && $status_filter != 'all') {
-    $where_clause .= " AND c.is_active = ?";
-    $params[] = ($status_filter == 'active') ? 1 : 0;
+    if ($status_filter == 'completed') {
+        $where_clause .= " AND e.completed = 1";
+    } elseif ($status_filter == 'active') {
+        $where_clause .= " AND e.completed = 0";
+    }
+}
+
+if (!empty($course_filter) && $course_filter != 'all') {
+    $where_clause .= " AND e.course_id = ?";
+    $params[] = $course_filter;
     $types .= 'i';
 }
 
-if (!empty($published_filter) && $published_filter != 'all') {
-    $where_clause .= " AND c.is_published = ?";
-    $params[] = ($published_filter == 'published') ? 1 : 0;
-    $types .= 'i';
+if (!empty($date_from)) {
+    $where_clause .= " AND DATE(e.enrolled_at) >= ?";
+    $params[] = $date_from;
+    $types .= 's';
+}
+
+if (!empty($date_to)) {
+    $where_clause .= " AND DATE(e.enrolled_at) <= ?";
+    $params[] = $date_to;
+    $types .= 's';
 }
 
 // Build ORDER BY
 $order_by = "ORDER BY ";
 switch ($sort) {
     case 'oldest':
-        $order_by .= "c.created_at ASC";
+        $order_by .= "e.enrolled_at ASC";
         break;
-    case 'title':
+    case 'name':
+        $order_by .= "u.full_name ASC";
+        break;
+    case 'course':
         $order_by .= "c.title ASC";
         break;
-    case 'price_low':
-        $order_by .= "c.price ASC";
-        break;
-    case 'price_high':
-        $order_by .= "c.price DESC";
-        break;
     default:
-        $order_by .= "c.created_at DESC";
+        $order_by .= "e.enrolled_at DESC";
         break;
 }
 
 // Get total count
 $count_sql = "SELECT COUNT(*) as total 
-              FROM courses c
-              LEFT JOIN users u ON c.instructor_id = u.id
+              FROM enrollments e
+              JOIN users u ON e.user_id = u.id
+              JOIN courses c ON e.course_id = c.id
               $where_clause";
 $count_stmt = $conn->prepare($count_sql);
 if (!empty($params)) {
@@ -325,16 +161,18 @@ if (!empty($params)) {
 }
 $count_stmt->execute();
 $count_result = $count_stmt->get_result();
-$total_courses = $count_result->fetch_assoc()['total'];
-$total_pages = ceil($total_courses / $limit);
+$total_enrollments = $count_result->fetch_assoc()['total'];
+$total_pages = ceil($total_enrollments / $limit);
 $count_stmt->close();
 
-// Get courses for current page - UPDATED QUERY
-$sql = "SELECT c.*, 
-               u.full_name as instructor_name,
-               u.username as instructor_username
-        FROM courses c
-        LEFT JOIN users u ON c.instructor_id = u.id
+// Get enrollments for current page
+$sql = "SELECT e.*, 
+               u.full_name, u.email, u.username,
+               c.title as course_title, c.price, c.category, c.level,
+               c.instructor_id
+        FROM enrollments e
+        JOIN users u ON e.user_id = u.id
+        JOIN courses c ON e.course_id = c.id
         $where_clause
         $order_by
         LIMIT ? OFFSET ?";
@@ -348,24 +186,50 @@ if (!empty($params)) {
     $stmt->bind_param($types, ...$params);
 }
 $stmt->execute();
-$courses_result = $stmt->get_result();
-$courses = $courses_result->fetch_all(MYSQLI_ASSOC);
+$enrollments_result = $stmt->get_result();
+$enrollments = $enrollments_result->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-// Get unique categories for filter
-$categories_sql = "SELECT DISTINCT category FROM courses WHERE category IS NOT NULL AND category != '' ORDER BY category";
-$categories_result = $conn->query($categories_sql);
-$categories = $categories_result->fetch_all(MYSQLI_ASSOC);
+// Get all courses for filter and manual enrollment
+$courses_sql = "SELECT id, title FROM courses WHERE is_active = 1 ORDER BY title";
+$courses_result = $conn->query($courses_sql);
+$all_courses = $courses_result->fetch_all(MYSQLI_ASSOC);
 
-// Calculate statistics
+// Get all users for manual enrollment
+$users_sql = "SELECT id, full_name, email, username FROM users WHERE is_active = 1 AND user_type = 'student' ORDER BY full_name";
+$users_result = $conn->query($users_sql);
+$all_users = $users_result->fetch_all(MYSQLI_ASSOC);
+
+// Calculate statistics based on your actual schema
 $stats_sql = "SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN is_published = 1 THEN 1 ELSE 0 END) as published,
-                AVG(price) as avg_price
-              FROM courses";
+                SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN completed = 0 THEN 1 ELSE 0 END) as active,
+                COUNT(DISTINCT user_id) as unique_students,
+                COUNT(DISTINCT course_id) as unique_courses
+              FROM enrollments";
 $stats_result = $conn->query($stats_sql);
 $stats = $stats_result->fetch_assoc();
+
+// For pending and cancelled (not in your schema), set to 0
+$stats['pending'] = 0;
+$stats['cancelled'] = 0;
+
+// Calculate revenue stats with error handling
+$revenue_stats = ['total_revenue' => 0, 'collected_revenue' => 0];
+try {
+    $revenue_sql = "SELECT 
+                    SUM(amount) as total_revenue,
+                    SUM(CASE WHEN payment_status = 'completed' THEN amount ELSE 0 END) as collected_revenue
+                    FROM payments";
+    $revenue_result = $conn->query($revenue_sql);
+    if ($revenue_result) {
+        $revenue_stats = $revenue_result->fetch_assoc() ?: $revenue_stats;
+    }
+} catch (Exception $e) {
+    // Payments table doesn't exist yet - we'll show zero revenue
+    $revenue_stats = ['total_revenue' => 0, 'collected_revenue' => 0];
+}
 
 $conn->close();
 ?>
@@ -375,7 +239,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Courses - Yogify Admin</title>
+    <title>Manage Enrollments - Yogify Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -398,7 +262,7 @@ $conn->close();
             color: var(--dark);
         }
         
-        /* Sidebar */
+        /* Sidebar - Use same as manage_courses.php */
         .sidebar {
             position: fixed;
             left: 0;
@@ -541,6 +405,11 @@ $conn->close();
             color: #92400e;
             border-left: 4px solid var(--warning);
         }
+        .message-info {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border-left: 4px solid var(--info);
+        }
         .close-message {
             background: none;
             border: none;
@@ -576,8 +445,8 @@ $conn->close();
         }
         .stat-icon.total { background: #f3e8ff; color: #7c3aed; }
         .stat-icon.active { background: #d1fae5; color: #065f46; }
-        .stat-icon.published { background: #fef3c7; color: #92400e; }
-        .stat-icon.price { background: #dbeafe; color: #1d4ed8; }
+        .stat-icon.completed { background: #dbeafe; color: #1d4ed8; }
+        .stat-icon.revenue { background: #fef3c7; color: #92400e; }
         .stat-card h3 {
             font-size: 14px;
             color: var(--gray);
@@ -594,6 +463,31 @@ $conn->close();
         .stat-card .subtext {
             font-size: 12px;
             color: var(--gray);
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .quick-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--dark);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .quick-action-btn:hover {
+            background: var(--light);
+            border-color: var(--primary);
         }
         
         /* Search and Filters */
@@ -653,14 +547,17 @@ $conn->close();
             white-space: nowrap;
         }
         
-        /* Course Form */
+        /* Manual Enrollment Form */
         .form-container {
             background: white;
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 30px;
-            display: <?php echo ($action == 'add' || $action == 'edit') ? 'block' : 'none'; ?>;
+            display: none; /* Hidden by default, shown via JS */
+        }
+        .form-container.active {
+            display: block;
         }
         .form-header {
             display: flex;
@@ -711,77 +608,6 @@ $conn->close();
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        textarea.form-control {
-            min-height: 100px;
-            resize: vertical;
-        }
-        .form-check {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .form-check input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-        .form-check label {
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .file-upload {
-            position: relative;
-            margin-bottom: 10px;
-        }
-        .file-input {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            cursor: pointer;
-        }
-        .file-label {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 15px;
-            background: var(--light);
-            border: 1px dashed var(--border);
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .file-label:hover {
-            background: #f3f4f6;
-        }
-        .file-preview {
-            margin-top: 10px;
-            max-width: 300px;
-        }
-        .file-preview img {
-            width: 100%;
-            height: auto;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-        .price-input {
-            position: relative;
-        }
-        .price-input .currency {
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--gray);
-        }
-        .price-input input {
-            width: 100%;
-            padding: 10px 10px 10px 30px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            font-size: 14px;
-        }
         .form-actions {
             display: flex;
             gap: 10px;
@@ -790,186 +616,59 @@ $conn->close();
             border-top: 1px solid var(--border);
         }
         
-        /* Courses Grid */
-        .courses-container {
+        /* Enrollments Table */
+        .table-container {
             background: white;
             border-radius: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             overflow: hidden;
+            overflow-x: auto;
         }
-        .courses-header {
+        .table-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 20px;
             border-bottom: 1px solid var(--border);
         }
-        .courses-header h3 {
+        .table-header h3 {
             color: var(--dark);
             font-size: 18px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        .courses-stats {
+        .table-stats {
             font-size: 13px;
             color: var(--gray);
         }
-        .courses-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 20px;
-        }
-        
-        /* Course Card */
-        .course-card {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: all 0.3s;
-            border: 1px solid var(--border);
-        }
-        .course-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        .course-image {
-            height: 160px;
-            position: relative;
-            overflow: hidden;
-        }
-        .course-image img {
+        .table {
             width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.3s;
+            border-collapse: collapse;
         }
-        .course-card:hover .course-image img {
-            transform: scale(1.05);
-        }
-        .course-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
+        .table th {
+            background: var(--light);
+            padding: 15px;
+            text-align: left;
             font-weight: 600;
+            color: var(--dark);
+            font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            background: rgba(0,0,0,0.7);
-            color: white;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
         }
-        .course-badge.published {
-            background: var(--success);
-            color: white;
-        }
-        .course-badge.inactive {
-            background: var(--danger);
-            color: white;
-        }
-        .course-badge.draft {
-            background: var(--warning);
-            color: #92400e;
-        }
-        .course-content {
-            padding: 20px;
-        }
-        .course-header {
-            margin-bottom: 15px;
-        }
-        .course-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--dark);
-            margin-bottom: 5px;
-            line-height: 1.3;
-        }
-        .course-description {
+        .table td {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
             font-size: 14px;
-            color: var(--gray);
-            margin-bottom: 15px;
-            line-height: 1.5;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
         }
-        .course-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            font-size: 13px;
-            color: var(--gray);
+        .table tbody tr:hover {
+            background: #f9fafb;
         }
-        .course-duration, .course-level, .course-category {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        .table tbody tr:last-child td {
+            border-bottom: none;
         }
-        .course-price {
-            margin-bottom: 15px;
-        }
-        .current-price {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--dark);
-        }
-        .course-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 15px;
-            border-top: 1px solid var(--border);
-        }
-        .instructor-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .instructor-avatar {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .instructor-name {
-            font-size: 13px;
-            color: var(--dark);
-        }
-        .course-actions {
-            display: flex;
-            gap: 5px;
-        }
-        .course-action-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            text-decoration: none;
-            font-size: 12px;
-            transition: all 0.3s;
-        }
-        .course-action-btn:hover {
-            transform: translateY(-2px);
-        }
-        .course-action-btn.edit { background: var(--warning); }
-        .course-action-btn.delete { background: var(--danger); }
-        .course-action-btn.view { background: var(--info); }
-        .course-action-btn.toggle { background: var(--gray); }
-        .course-action-btn.publish { background: var(--success); }
         
         /* Badges */
         .badge {
@@ -981,13 +680,105 @@ $conn->close();
             text-transform: uppercase;
             letter-spacing: 0.3px;
         }
+        .badge-active { background: #d1fae5; color: #065f46; }
+        .badge-completed { background: #dbeafe; color: #1d4ed8; }
+        .badge-pending { background: #fef3c7; color: #92400e; }
+        .badge-cancelled { background: #fee2e2; color: #991b1b; }
+        .badge-paid { background: #d1fae5; color: #065f46; }
+        .badge-unpaid { background: #fef3c7; color: #92400e; }
         .badge-beginner { background: #d1fae5; color: #065f46; }
         .badge-intermediate { background: #fef3c7; color: #92400e; }
         .badge-advanced { background: #fee2e2; color: #991b1b; }
-        .badge-hatha { background: #e0e7ff; color: #3730a3; }
-        .badge-vinyasa { background: #fce7f3; color: #be185d; }
-        .badge-yin { background: #ecfdf5; color: #047857; }
-        .badge-meditation { background: #f0f9ff; color: #0369a1; }
+        .badge-progress { background: #e0e7ff; color: #3730a3; }
+        
+        /* Actions */
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-decoration: none;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+        .action-btn.active { background: var(--success); }
+        .action-btn.complete { background: var(--info); }
+        .action-btn.delete { background: var(--danger); }
+        .action-btn.view { background: var(--info); }
+        .action-btn.payment { background: var(--warning); }
+        
+        /* User and Course Info */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .user-details {
+            line-height: 1.4;
+        }
+        .user-name {
+            font-weight: 500;
+            color: var(--dark);
+        }
+        .user-email {
+            font-size: 12px;
+            color: var(--gray);
+        }
+        .course-info {
+            max-width: 250px;
+        }
+        .course-title {
+            font-weight: 500;
+            color: var(--dark);
+            margin-bottom: 3px;
+        }
+        .course-meta {
+            font-size: 12px;
+            color: var(--gray);
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            width: 100px;
+            background: var(--light);
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--success);
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            font-size: 12px;
+            color: var(--gray);
+            margin-top: 3px;
+        }
         
         /* Pagination */
         .pagination {
@@ -1031,7 +822,6 @@ $conn->close();
             padding: 60px 20px;
             text-align: center;
             color: var(--gray);
-            grid-column: 1 / -1;
         }
         .empty-state i {
             font-size: 48px;
@@ -1051,8 +841,8 @@ $conn->close();
             .main-content {
                 margin-left: 220px;
             }
-            .courses-grid {
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
         
@@ -1079,21 +869,14 @@ $conn->close();
             .btn-filter {
                 flex: 1;
             }
-            .courses-grid {
-                grid-template-columns: 1fr;
-            }
-            .stats-container {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 480px) {
             .stats-container {
                 grid-template-columns: 1fr;
             }
-            .course-meta {
-                flex-wrap: wrap;
-                gap: 10px;
+            .table {
+                display: block;
+            }
+            .table th, .table td {
+                padding: 10px;
             }
         }
     </style>
@@ -1103,7 +886,7 @@ $conn->close();
     <div class="sidebar">
         <div class="sidebar-header">
             <h2><i class="fas fa-spa"></i> Yogify Admin</h2>
-            <p>Course Management</p>
+            <p>Enrollment Management</p>
             <div class="admin-profile">
                 <div class="admin-avatar">
                     <?php 
@@ -1137,7 +920,7 @@ $conn->close();
                 </a>
             </li>
             <li class="nav-item">
-                <a href="manage_courses.php" class="nav-link active">
+                <a href="manage_courses.php" class="nav-link">
                     <i class="fas fa-book"></i> Courses
                 </a>
             </li>
@@ -1147,7 +930,7 @@ $conn->close();
                 </a>
             </li>
             <li class="nav-item">
-                <a href="enrollments.php" class="nav-link">
+                <a href="enrollments.php" class="nav-link active">
                     <i class="fas fa-graduation-cap"></i> Enrollments
                 </a>
             </li>
@@ -1173,14 +956,14 @@ $conn->close();
     <div class="main-content">
         <!-- Header -->
         <div class="header">
-            <h1><i class="fas fa-book"></i> Manage Courses</h1>
+            <h1><i class="fas fa-graduation-cap"></i> Manage Enrollments</h1>
             <div class="header-actions">
                 <a href="dashboard.php" class="btn btn-light">
                     <i class="fas fa-arrow-left"></i> Back
                 </a>
-                <a href="?action=add" class="btn btn-success">
-                    <i class="fas fa-plus-circle"></i> Add New Course
-                </a>
+                <button id="manualEnrollBtn" class="btn btn-success">
+                    <i class="fas fa-user-plus"></i> Manual Enrollment
+                </button>
             </div>
         </div>
         
@@ -1192,175 +975,106 @@ $conn->close();
         </div>
         <?php endif; ?>
         
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <a href="?status=active" class="quick-action-btn">
+                <i class="fas fa-user-check"></i> Active Enrollments (<?php echo $stats['active'] ?? 0; ?>)
+            </a>
+            <a href="?status=completed" class="quick-action-btn">
+                <i class="fas fa-trophy"></i> Completed (<?php echo $stats['completed'] ?? 0; ?>)
+            </a>
+            <a href="?sort=newest" class="quick-action-btn">
+                <i class="fas fa-history"></i> Recent Enrollments
+            </a>
+        </div>
+        
         <!-- Statistics -->
         <div class="stats-container">
             <div class="stat-card">
                 <div class="stat-icon total">
-                    <i class="fas fa-book"></i>
+                    <i class="fas fa-graduation-cap"></i>
                 </div>
-                <h3>Total Courses</h3>
+                <h3>Total Enrollments</h3>
                 <div class="value"><?php echo $stats['total'] ?? 0; ?></div>
-                <div class="subtext">All courses</div>
+                <div class="subtext">All time enrollments</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon active">
-                    <i class="fas fa-check-circle"></i>
+                    <i class="fas fa-user-check"></i>
                 </div>
-                <h3>Active Courses</h3>
+                <h3>Active Students</h3>
                 <div class="value"><?php echo $stats['active'] ?? 0; ?></div>
-                <div class="subtext">Available for enrollment</div>
+                <div class="subtext">Currently active</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon published">
-                    <i class="fas fa-globe"></i>
+                <div class="stat-icon completed">
+                    <i class="fas fa-trophy"></i>
                 </div>
-                <h3>Published</h3>
-                <div class="value"><?php echo $stats['published'] ?? 0; ?></div>
-                <div class="subtext">Publicly visible</div>
+                <h3>Completed</h3>
+                <div class="value"><?php echo $stats['completed'] ?? 0; ?></div>
+                <div class="subtext">Course completed</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon price">
+                <div class="stat-icon revenue">
                     <i class="fas fa-rupee-sign"></i>
                 </div>
-                <h3>Avg. Price</h3>
-                <div class="value">₹<?php echo number_format($stats['avg_price'] ?? 0, 2); ?></div>
-                <div class="subtext">Average course price</div>
+                <h3>Revenue</h3>
+                <div class="value">₹<?php echo number_format($revenue_stats['collected_revenue'] ?? 0, 2); ?></div>
+                <div class="subtext">Total collected</div>
             </div>
         </div>
         
-        <!-- Course Form (Add/Edit) -->
-        <?php if ($action == 'add' || $action == 'edit'): ?>
-        <div class="form-container">
+        <!-- Manual Enrollment Form -->
+        <div class="form-container" id="manualEnrollForm">
             <div class="form-header">
-                <h2><i class="fas fa-book-medical"></i> <?php echo $action == 'add' ? 'Add New Course' : 'Edit Course'; ?></h2>
-                <a href="manage_courses.php" class="btn btn-light">
-                    <i class="fas fa-times"></i> Cancel
-                </a>
+                <h2><i class="fas fa-user-plus"></i> Manual Enrollment</h2>
+                <button class="btn btn-light" onclick="closeManualEnroll()">
+                    <i class="fas fa-times"></i> Close
+                </button>
             </div>
             
-            <form method="POST" action="" enctype="multipart/form-data">
-                <input type="hidden" name="id" value="<?php echo $course['id'] ?? ''; ?>">
-                
-                <div class="form-group">
-                    <label class="form-label">Course Title <span class="required">*</span></label>
-                    <input type="text" name="title" class="form-control" 
-                           value="<?php echo htmlspecialchars($course['title'] ?? ''); ?>" 
-                           placeholder="Enter course title" required>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Description</label>
-                    <textarea name="description" class="form-control" placeholder="Enter detailed course description..." 
-                              rows="4"><?php echo htmlspecialchars($course['description'] ?? ''); ?></textarea>
-                </div>
+            <form method="POST" action="">
+                <input type="hidden" name="manual_enroll" value="1">
                 
                 <div class="form-row">
                     <div class="form-col">
                         <div class="form-group">
-                            <label class="form-label">Category</label>
-                            <select name="category" class="form-control">
-                                <option value="">Select Category</option>
-                                <option value="Hatha Yoga" <?php echo ($course['category'] ?? '') == 'Hatha Yoga' ? 'selected' : ''; ?>>Hatha Yoga</option>
-                                <option value="Vinyasa Yoga" <?php echo ($course['category'] ?? '') == 'Vinyasa Yoga' ? 'selected' : ''; ?>>Vinyasa Yoga</option>
-                                <option value="Meditation" <?php echo ($course['category'] ?? '') == 'Meditation' ? 'selected' : ''; ?>>Meditation</option>
-                                <option value="Yin Yoga" <?php echo ($course['category'] ?? '') == 'Yin Yoga' ? 'selected' : ''; ?>>Yin Yoga</option>
-                                <option value="Ashtanga Yoga" <?php echo ($course['category'] ?? '') == 'Ashtanga Yoga' ? 'selected' : ''; ?>>Ashtanga Yoga</option>
-                                <option value="Prenatal Yoga" <?php echo ($course['category'] ?? '') == 'Prenatal Yoga' ? 'selected' : ''; ?>>Prenatal Yoga</option>
-                                <option value="Power Yoga" <?php echo ($course['category'] ?? '') == 'Power Yoga' ? 'selected' : ''; ?>>Power Yoga</option>
-                                <option value="Restorative Yoga" <?php echo ($course['category'] ?? '') == 'Restorative Yoga' ? 'selected' : ''; ?>>Restorative Yoga</option>
+                            <label class="form-label">Select Student <span class="required">*</span></label>
+                            <select name="user_id" class="form-control" required>
+                                <option value="">Choose a student...</option>
+                                <?php foreach ($all_users as $user): ?>
+                                <option value="<?php echo $user['id']; ?>">
+                                    <?php echo htmlspecialchars($user['full_name'] . ' (' . $user['email'] . ')'); ?>
+                                </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>
                     <div class="form-col">
                         <div class="form-group">
-                            <label class="form-label">Level</label>
-                            <select name="level" class="form-control">
-                                <option value="beginner" <?php echo ($course['level'] ?? '') == 'beginner' ? 'selected' : ''; ?>>Beginner</option>
-                                <option value="intermediate" <?php echo ($course['level'] ?? '') == 'intermediate' ? 'selected' : ''; ?>>Intermediate</option>
-                                <option value="advanced" <?php echo ($course['level'] ?? '') == 'advanced' ? 'selected' : ''; ?>>Advanced</option>
-                                <option value="all-levels" <?php echo ($course['level'] ?? '') == 'all-levels' ? 'selected' : ''; ?>>All Levels</option>
+                            <label class="form-label">Select Course <span class="required">*</span></label>
+                            <select name="course_id" class="form-control" required>
+                                <option value="">Choose a course...</option>
+                                <?php foreach ($all_courses as $course): ?>
+                                <option value="<?php echo $course['id']; ?>">
+                                    <?php echo htmlspecialchars($course['title']); ?>
+                                </option>
+                                <?php endforeach; ?>
                             </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-col">
-                        <div class="form-group">
-                            <label class="form-label">Duration</label>
-                            <input type="text" name="duration" class="form-control" 
-                                   value="<?php echo htmlspecialchars($course['duration'] ?? ''); ?>" 
-                                   placeholder="e.g., 8 weeks, 30 hours">
-                        </div>
-                    </div>
-                    <div class="form-col">
-                        <div class="form-group">
-                            <label class="form-label">Price (₹)</label>
-                            <div class="price-input">
-                                <span class="currency">₹</span>
-                                <input type="number" name="price" class="form-control" 
-                                       value="<?php echo $course['price'] ?? '0'; ?>" 
-                                       placeholder="0.00" step="0.01" min="0">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Instructor</label>
-                    <select name="instructor_id" class="form-control">
-                        <option value="">Select Instructor</option>
-                        <?php foreach ($instructors as $instructor): ?>
-                        <option value="<?php echo $instructor['id']; ?>" 
-                                <?php echo ($course['instructor_id'] ?? '') == $instructor['id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($instructor['full_name'] . ' (@' . $instructor['username'] . ')'); ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Course Image</label>
-                    <div class="file-upload">
-                        <input type="file" name="course_image" class="file-input" accept="image/*" id="courseImage">
-                        <label class="file-label" for="courseImage">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <span>Choose course image...</span>
-                        </label>
-                    </div>
-                    <?php if (!empty($course['thumbnail'])): ?>
-                    <div class="file-preview">
-                        <img src="../<?php echo htmlspecialchars($course['thumbnail']); ?>" alt="Course Preview" id="courseImagePreview">
-                    </div>
-                    <?php endif; ?>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-col">
-                        <div class="form-check">
-                            <input type="checkbox" name="is_published" id="is_published" value="1" 
-                                   <?php echo ($course['is_published'] ?? 0) == 1 ? 'checked' : ''; ?>>
-                            <label for="is_published">Published (Publicly visible)</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" name="is_active" id="is_active" value="1" 
-                                   <?php echo ($course['is_active'] ?? 1) == 1 ? 'checked' : ''; ?>>
-                            <label for="is_active">Active (Available for enrollment)</label>
                         </div>
                     </div>
                 </div>
                 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> <?php echo $action == 'add' ? 'Create Course' : 'Update Course'; ?>
+                        <i class="fas fa-save"></i> Enroll Student
                     </button>
-                    <a href="manage_courses.php" class="btn btn-light">
+                    <button type="button" class="btn btn-light" onclick="closeManualEnroll()">
                         <i class="fas fa-times"></i> Cancel
-                    </a>
+                    </button>
                 </div>
             </form>
         </div>
-        <?php endif; ?>
         
         <!-- Search and Filters -->
         <div class="filters-container">
@@ -1369,65 +1083,56 @@ $conn->close();
                     <div class="filter-group">
                         <label><i class="fas fa-search"></i> Search</label>
                         <input type="text" name="search" class="filter-input" 
-                               placeholder="Search courses, descriptions, or instructors..." 
+                               placeholder="Search by student name, email, or course..." 
                                value="<?php echo htmlspecialchars($search); ?>">
                     </div>
                     <div class="filter-group">
-                        <label><i class="fas fa-filter"></i> Category</label>
-                        <select name="category" class="filter-select">
-                            <option value="all">All Categories</option>
-                            <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo htmlspecialchars($cat['category']); ?>" 
-                                    <?php echo $category_filter == $cat['category'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cat['category']); ?>
-                            </option>
-                            <?php endforeach; ?>
+                        <label><i class="fas fa-tag"></i> Status</label>
+                        <select name="status" class="filter-select">
+                            <option value="all">All Status</option>
+                            <option value="active" <?php echo $status_filter == 'active' ? 'selected' : ''; ?>>Active</option>
+                            <option value="completed" <?php echo $status_filter == 'completed' ? 'selected' : ''; ?>>Completed</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label><i class="fas fa-signal"></i> Level</label>
-                        <select name="level" class="filter-select">
-                            <option value="all">All Levels</option>
-                            <option value="beginner" <?php echo $level_filter == 'beginner' ? 'selected' : ''; ?>>Beginner</option>
-                            <option value="intermediate" <?php echo $level_filter == 'intermediate' ? 'selected' : ''; ?>>Intermediate</option>
-                            <option value="advanced" <?php echo $level_filter == 'advanced' ? 'selected' : ''; ?>>Advanced</option>
-                            <option value="all-levels" <?php echo $level_filter == 'all-levels' ? 'selected' : ''; ?>>All Levels</option>
+                        <label><i class="fas fa-book"></i> Course</label>
+                        <select name="course" class="filter-select">
+                            <option value="all">All Courses</option>
+                            <?php foreach ($all_courses as $course): ?>
+                            <option value="<?php echo $course['id']; ?>" 
+                                    <?php echo $course_filter == $course['id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($course['title']); ?>
+                            </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
                 
                 <div class="filters-row">
                     <div class="filter-group">
-                        <label><i class="fas fa-toggle-on"></i> Status</label>
-                        <select name="status" class="filter-select">
-                            <option value="all">All Status</option>
-                            <option value="active" <?php echo $status_filter == 'active' ? 'selected' : ''; ?>>Active</option>
-                            <option value="inactive" <?php echo $status_filter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                        </select>
+                        <label><i class="fas fa-calendar"></i> Date From</label>
+                        <input type="date" name="date_from" class="filter-input" 
+                               value="<?php echo htmlspecialchars($date_from); ?>">
                     </div>
                     <div class="filter-group">
-                        <label><i class="fas fa-globe"></i> Published</label>
-                        <select name="published" class="filter-select">
-                            <option value="all">All Courses</option>
-                            <option value="published" <?php echo $published_filter == 'published' ? 'selected' : ''; ?>>Published Only</option>
-                            <option value="draft" <?php echo $published_filter == 'draft' ? 'selected' : ''; ?>>Draft Only</option>
-                        </select>
+                        <label><i class="fas fa-calendar"></i> Date To</label>
+                        <input type="date" name="date_to" class="filter-input" 
+                               value="<?php echo htmlspecialchars($date_to); ?>">
                     </div>
                     <div class="filter-group">
                         <label><i class="fas fa-sort"></i> Sort By</label>
                         <select name="sort" class="filter-select">
                             <option value="newest" <?php echo $sort == 'newest' ? 'selected' : ''; ?>>Newest First</option>
                             <option value="oldest" <?php echo $sort == 'oldest' ? 'selected' : ''; ?>>Oldest First</option>
-                            <option value="title" <?php echo $sort == 'title' ? 'selected' : ''; ?>>Title (A-Z)</option>
-                            <option value="price_low" <?php echo $sort == 'price_low' ? 'selected' : ''; ?>>Price: Low to High</option>
-                            <option value="price_high" <?php echo $sort == 'price_high' ? 'selected' : ''; ?>>Price: High to Low</option>
+                            <option value="name" <?php echo $sort == 'name' ? 'selected' : ''; ?>>Student Name (A-Z)</option>
+                            <option value="course" <?php echo $sort == 'course' ? 'selected' : ''; ?>>Course Title (A-Z)</option>
                         </select>
                     </div>
                     <div class="filter-actions">
                         <button type="submit" class="btn btn-primary btn-filter">
                             <i class="fas fa-filter"></i> Apply Filters
                         </button>
-                        <a href="manage_courses.php" class="btn btn-light btn-filter">
+                        <a href="enrollments.php" class="btn btn-light btn-filter">
                             <i class="fas fa-redo"></i> Reset
                         </a>
                     </div>
@@ -1435,128 +1140,131 @@ $conn->close();
             </form>
         </div>
         
-        <!-- Courses Grid -->
-        <div class="courses-container">
-            <div class="courses-header">
-                <h3><i class="fas fa-list"></i> Courses List</h3>
-                <div class="courses-stats">
-                    Showing <?php echo count($courses); ?> of <?php echo $total_courses; ?> courses
+        <!-- Enrollments Table -->
+        <div class="table-container">
+            <div class="table-header">
+                <h3><i class="fas fa-list"></i> Enrollments List</h3>
+                <div class="table-stats">
+                    Showing <?php echo count($enrollments); ?> of <?php echo $total_enrollments; ?> enrollments
                     <?php if ($total_pages > 1): ?> | Page <?php echo $page; ?> of <?php echo $total_pages; ?><?php endif; ?>
                 </div>
             </div>
             
-            <?php if (empty($courses)): ?>
+            <?php if (empty($enrollments)): ?>
             <div class="empty-state">
-                <i class="fas fa-book-open"></i>
-                <h4>No courses found</h4>
+                <i class="fas fa-graduation-cap"></i>
+                <h4>No enrollments found</h4>
                 <p>Try adjusting your search or filter criteria</p>
-                <a href="?action=add" class="btn btn-primary mt-3">
-                    <i class="fas fa-plus-circle"></i> Add Your First Course
-                </a>
+                <button id="manualEnrollBtn2" class="btn btn-primary mt-3">
+                    <i class="fas fa-user-plus"></i> Add First Enrollment
+                </button>
             </div>
             <?php else: ?>
-            <div class="courses-grid">
-                <?php foreach ($courses as $c): 
-                    // Generate avatar initials
-                    $avatar_initials = '';
-                    if (!empty($c['instructor_name'])) {
-                        $names = explode(' ', $c['instructor_name']);
-                        foreach($names as $n) {
-                            $avatar_initials .= strtoupper(substr($n, 0, 1));
-                            if (strlen($avatar_initials) >= 2) break;
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Course</th>
+                        <th>Enrolled Date</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($enrollments as $enrollment): 
+                        // Generate user avatar initials
+                        $user_initials = '';
+                        if (!empty($enrollment['full_name'])) {
+                            $names = explode(' ', $enrollment['full_name']);
+                            foreach($names as $n) {
+                                $user_initials .= strtoupper(substr($n, 0, 1));
+                                if (strlen($user_initials) >= 2) break;
+                            }
                         }
-                    }
-                ?>
-                <div class="course-card">
-                    <div class="course-image">
-                        <?php if (!empty($c['thumbnail'])): ?>
-                        <img src="../<?php echo htmlspecialchars($c['thumbnail']); ?>" alt="<?php echo htmlspecialchars($c['title']); ?>">
-                        <?php else: ?>
-                        <div style="width:100%;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);display:flex;align-items:center;justify-content:center;color:white;">
-                            <i class="fas fa-spa" style="font-size:48px;"></i>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <?php if ($c['is_published']): ?>
-                        <span class="course-badge published">Published</span>
-                        <?php elseif (!$c['is_active']): ?>
-                        <span class="course-badge inactive">Inactive</span>
-                        <?php else: ?>
-                        <span class="course-badge draft">Draft</span>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="course-content">
-                        <div class="course-header">
-                            <h3 class="course-title"><?php echo htmlspecialchars($c['title']); ?></h3>
-                            <div class="course-description">
-                                <?php echo htmlspecialchars(substr($c['description'] ?? 'No description available', 0, 100) . '...'); ?>
-                            </div>
-                        </div>
-                        
-                        <div class="course-meta">
-                            <div class="course-category">
-                                <i class="fas fa-tag"></i>
-                                <span><?php echo htmlspecialchars($c['category'] ?? 'Uncategorized'); ?></span>
-                            </div>
-                            <div class="course-level">
-                                <span class="badge badge-<?php echo $c['level'] ?? 'beginner'; ?>">
-                                    <?php echo ucfirst($c['level'] ?? 'beginner'); ?>
-                                </span>
-                            </div>
-                            <?php if (!empty($c['duration'])): ?>
-                            <div class="course-duration">
-                                <i class="far fa-clock"></i>
-                                <span><?php echo htmlspecialchars($c['duration']); ?></span>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <?php if (!empty($c['price']) && $c['price'] > 0): ?>
-                        <div class="course-price">
-                            <span class="current-price">₹<?php echo number_format($c['price'], 2); ?></span>
-                        </div>
-                        <?php else: ?>
-                        <div class="course-price">
-                            <span class="current-price">Free</span>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <div class="course-footer">
-                            <div class="instructor-info">
-                                <?php if (!empty($c['instructor_name'])): ?>
-                                <div class="instructor-avatar">
-                                    <?php echo $avatar_initials ?: 'I'; ?>
+                    ?>
+                    <tr>
+                        <td>
+                            <div class="user-info">
+                                <div class="user-avatar">
+                                    <?php echo $user_initials ?: 'S'; ?>
                                 </div>
-                                <div class="instructor-name">
-                                    <?php echo htmlspecialchars($c['instructor_name']); ?>
+                                <div class="user-details">
+                                    <div class="user-name"><?php echo htmlspecialchars($enrollment['full_name']); ?></div>
+                                    <div class="user-email"><?php echo htmlspecialchars($enrollment['email']); ?></div>
                                 </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="course-info">
+                                <div class="course-title"><?php echo htmlspecialchars($enrollment['course_title']); ?></div>
+                                <div class="course-meta">
+                                    <?php echo htmlspecialchars($enrollment['category'] ?? 'Uncategorized'); ?>
+                                    <?php if (!empty($enrollment['price']) && $enrollment['price'] > 0): ?>
+                                    &nbsp;•&nbsp;₹<?php echo number_format($enrollment['price'], 2); ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <?php 
+                            $enrolled_date = date('M d, Y', strtotime($enrollment['enrolled_at']));
+                            $enrolled_time = date('h:i A', strtotime($enrollment['enrolled_at']));
+                            echo $enrolled_date . '<br><small style="color: var(--gray); font-size: 12px;">' . $enrolled_time . '</small>';
+                            ?>
+                        </td>
+                        <td>
+                            <div class="progress-container">
+                                <div class="progress-bar" style="width: <?php echo $enrollment['progress_percent']; ?>%"></div>
+                            </div>
+                            <div class="progress-text"><?php echo $enrollment['progress_percent']; ?>%</div>
+                        </td>
+                        <td>
+                            <?php
+                            $status_class = '';
+                            $status_text = '';
+                            if ($enrollment['completed'] == 1) {
+                                $status_class = 'badge-completed';
+                                $status_text = 'Completed';
+                            } else {
+                                $status_class = 'badge-active';
+                                $status_text = 'Active';
+                            }
+                            ?>
+                            <span class="badge <?php echo $status_class; ?>">
+                                <?php echo $status_text; ?>
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <?php if ($enrollment['completed'] == 0): ?>
+                                <a href="?action=update_status&id=<?php echo $enrollment['id']; ?>&status=completed" 
+                                   class="action-btn complete" title="Mark as Completed">
+                                    <i class="fas fa-trophy"></i>
+                                </a>
                                 <?php else: ?>
-                                <div class="instructor-name" style="color:var(--gray);font-size:12px;">
-                                    No instructor assigned
-                                </div>
+                                <a href="?action=update_status&id=<?php echo $enrollment['id']; ?>&status=active" 
+                                   class="action-btn active" title="Mark as Active">
+                                    <i class="fas fa-undo"></i>
+                                </a>
                                 <?php endif; ?>
-                            </div>
-                            
-                            <div class="course-actions">
-                                <a href="?action=edit&id=<?php echo $c['id']; ?>" class="course-action-btn edit" title="Edit Course">
-                                    <i class="fas fa-edit"></i>
+                                
+                                <a href="../course-player.php?course_id=<?php echo $enrollment['course_id']; ?>" 
+                                   target="_blank" class="action-btn view" title="View Course">
+                                    <i class="fas fa-external-link-alt"></i>
                                 </a>
-                                <a href="?action=toggle_published&id=<?php echo $c['id']; ?>" class="course-action-btn publish" title="<?php echo $c['is_published'] ? 'Unpublish' : 'Publish'; ?>">
-                                    <i class="fas fa-globe"></i>
-                                </a>
-                                <a href="?action=toggle_status&id=<?php echo $c['id']; ?>&status=<?php echo $c['is_active'] ? 'inactive' : 'active'; ?>" class="course-action-btn toggle" title="<?php echo $c['is_active'] ? 'Deactivate' : 'Activate'; ?>">
-                                    <i class="fas fa-power-off"></i>
-                                </a>
-                                <a href="?action=delete&id=<?php echo $c['id']; ?>" class="course-action-btn delete" title="Delete Course" onclick="return confirm('Are you sure you want to delete this course?')">
+                                
+                                <a href="?action=delete&id=<?php echo $enrollment['id']; ?>" 
+                                   class="action-btn delete" title="Delete Enrollment" 
+                                   onclick="return confirm('Are you sure you want to delete this enrollment?')">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
             
             <!-- Pagination -->
             <?php if ($total_pages > 1): ?>
@@ -1590,37 +1298,28 @@ $conn->close();
     </div>
 
     <script>
-        // Image preview for course image
-        const courseImageInput = document.getElementById('courseImage');
-        if (courseImageInput) {
-            courseImageInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        let previewId = 'courseImagePreview';
-                        let preview = document.getElementById(previewId);
-                        
-                        if (!preview) {
-                            const filePreview = document.createElement('div');
-                            filePreview.className = 'file-preview';
-                            preview = document.createElement('img');
-                            preview.id = previewId;
-                            preview.alt = 'Course Image Preview';
-                            preview.style.width = '100%';
-                            preview.style.height = 'auto';
-                            preview.style.borderRadius = '8px';
-                            preview.style.border = '1px solid var(--border)';
-                            filePreview.appendChild(preview);
-                            courseImageInput.parentNode.appendChild(filePreview);
-                        }
-                        preview.src = e.target.result;
-                    }
-                    reader.readAsDataURL(file);
-                }
+        // Manual enrollment form toggle
+        const manualEnrollBtn = document.getElementById('manualEnrollBtn');
+        const manualEnrollBtn2 = document.getElementById('manualEnrollBtn2');
+        const manualEnrollForm = document.getElementById('manualEnrollForm');
+        
+        if (manualEnrollBtn) {
+            manualEnrollBtn.addEventListener('click', () => {
+                manualEnrollForm.classList.add('active');
             });
         }
-
+        
+        if (manualEnrollBtn2) {
+            manualEnrollBtn2.addEventListener('click', () => {
+                manualEnrollForm.classList.add('active');
+                manualEnrollForm.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+        
+        function closeManualEnroll() {
+            manualEnrollForm.classList.remove('active');
+        }
+        
         // Auto-hide messages after 5 seconds
         setTimeout(() => {
             const messages = document.querySelectorAll('.message-box');
@@ -1630,25 +1329,55 @@ $conn->close();
                 setTimeout(() => msg.style.display = 'none', 500);
             });
         }, 5000);
-
-        // Description character counter
-        const descriptionTextarea = document.querySelector('textarea[name="description"]');
-        if (descriptionTextarea) {
-            descriptionTextarea.addEventListener('input', function() {
-                const charCount = this.value.length;
-                const counter = document.getElementById('charCounter') || 
-                    (() => {
-                        const counter = document.createElement('div');
-                        counter.id = 'charCounter';
-                        counter.style.fontSize = '12px';
-                        counter.style.color = 'var(--gray)';
-                        counter.style.marginTop = '5px';
-                        this.parentNode.appendChild(counter);
-                        return counter;
-                    })();
-                counter.textContent = `${charCount} characters`;
+        
+        // Date validation
+        const dateFrom = document.querySelector('input[name="date_from"]');
+        const dateTo = document.querySelector('input[name="date_to"]');
+        
+        if (dateFrom && dateTo) {
+            dateFrom.addEventListener('change', function() {
+                dateTo.min = this.value;
+            });
+            
+            dateTo.addEventListener('change', function() {
+                dateFrom.max = this.value;
             });
         }
+        
+        // Initialize tooltips
+        const actionButtons = document.querySelectorAll('.action-btn');
+        actionButtons.forEach(btn => {
+            btn.addEventListener('mouseenter', function() {
+                const title = this.getAttribute('title');
+                if (title) {
+                    // Simple tooltip implementation
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'tooltip';
+                    tooltip.textContent = title;
+                    tooltip.style.position = 'absolute';
+                    tooltip.style.background = 'rgba(0,0,0,0.8)';
+                    tooltip.style.color = 'white';
+                    tooltip.style.padding = '5px 10px';
+                    tooltip.style.borderRadius = '4px';
+                    tooltip.style.fontSize = '12px';
+                    tooltip.style.zIndex = '10000';
+                    tooltip.style.whiteSpace = 'nowrap';
+                    
+                    const rect = this.getBoundingClientRect();
+                    tooltip.style.top = (rect.top - 30) + 'px';
+                    tooltip.style.left = rect.left + 'px';
+                    
+                    document.body.appendChild(tooltip);
+                    this.tooltip = tooltip;
+                }
+            });
+            
+            btn.addEventListener('mouseleave', function() {
+                if (this.tooltip) {
+                    this.tooltip.remove();
+                }
+            });
+        });
     </script>
 </body>
 </html>
